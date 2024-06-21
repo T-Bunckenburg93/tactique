@@ -1,6 +1,7 @@
 using Random
 using GLMakie
 import LinearAlgebra: norm
+import Base: show
 
 GLMakie.activate!(inline=true)
 """
@@ -27,8 +28,10 @@ mutable struct Unit
     team::String
     positionX::Number
     positionY::Number
+    destinationX::Union{Missing, Number}
+    destinationY::Union{Missing, Number}
     InfluenceRadius::Number # limited to density.
-    bombardmentRadius::Number
+    bombardmentRadius::Union{Missing, Number}
     staringSoliderCnt::Int # 0-99999
     soliderCnt::Int # 0-99999
     combatStrength::Number # 0,1,2
@@ -37,7 +40,8 @@ mutable struct Unit
     pctInflicted::Number
     suppliesConsumed::Number
     speed::Number
-
+    maxSpeed::Number
+    isEngaged::Bool
 end
 
 """
@@ -97,7 +101,9 @@ function unit(
         type="debugInfantry", 
         team="teamDev", 
         positionX=0, 
-        positionY=0, 
+        positionY=0,
+        destinationX=missing,
+        destinationY=missing,
         InfluenceRadius=10, 
         bombardmentRadius=0,
         staringSoliderCnt=1000,
@@ -108,9 +114,11 @@ function unit(
         pctInflicted = 0,
         suppliesConsumed = 0,
         speed = 5,
+        maxSpeed = 5,
+        isEngaged = false
 
         )
-    u = Unit(name,id, type, team, positionX, positionY, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed)
+    u = Unit(name,id, type, team, positionX, positionY, destinationX,destinationY, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed, maxSpeed, isEngaged)
     # ensure that the unit meets required constrants
     changeInfluence!(u, InfluenceRadius)
 
@@ -130,7 +138,7 @@ end
 
 
 # I want to see if unit1's radius overlaps with unit2
-function checkOverlap(unit1::Unit, unit2::Unit)
+function checkOverlap(unit1::Unit, unit2::Unit,print=false)
     d = sqrt((unit1.positionX - unit2.positionX)^2 + (unit1.positionY - unit2.positionY)^2)
     r₁ = unit1.InfluenceRadius
     r₂ = unit2.InfluenceRadius
@@ -140,19 +148,29 @@ function checkOverlap(unit1::Unit, unit2::Unit)
     # println("r₂:", r₂)
 
     if d == 0 && r₁ == r₂ 
-        println("Units ", unit1.name, " and ", unit2.name, " exactly overlap")
+        if print
+            println("Units ", unit1.name, " and ", unit2.name, " exactly overlap")
+        end
         return "overlap"
     elseif d <= r₁ - r₂ 
-        println("Units ", unit2.name, " is inside ", unit1.name,)
+        if print
+            println("Units ", unit2.name, " is inside ", unit1.name,)
+        end
         return "swallow"
     elseif d <= r₂ - r₁ 
-        println("Units ", unit1.name, " is inside ", unit2.name,)
+        if print
+            println("Units ", unit1.name, " is inside ", unit2.name,)
+        end
         return "swallowed"
     elseif d < r₁ + r₂
-        println("Units ", unit1.name, " and ", unit2.name, " overlap")
+        if print
+            println("Units ", unit1.name, " and ", unit2.name, " overlap")
+        end
         return "overlap"
     else 
-        println("Units ", unit1.name, " and ", unit2.name, " do not overlap")
+        if print
+            println("Units ", unit1.name, " and ", unit2.name, " do not overlap")
+        end
         return "no overlap"
     end
 
@@ -165,7 +183,7 @@ finds the two sets of points where two units sphere of influence intersect.
 function getIntersectionPoints(unit1::Unit, unit2::Unit)
 
     if checkOverlap(unit1, unit2) != "overlap"
-        println("Units ", unit1.name, " and ", unit1.name, " do not overlap.")
+        # println("Units ", unit1.name, " and ", unit1.name, " do not overlap.")
         return 
     else
 
@@ -198,9 +216,11 @@ end
 function getOverlapArea(unit1::Unit, unit2::Unit)
 
     # check that they do overlap else complex lol
-    if checkOverlap(unit1, unit2) != "overlap"
-        println("Units ", unit1.name, " and ", unit1.name, " do not overlap.")
+    if checkOverlap(unit1, unit2) ∉ ["overlap","swallow","swallowed"]
+        # println("Units ", unit1.name, " and ", unit1.name, " do not overlap.")
         return 
+    elseif checkOverlap(unit1, unit2) in ["swallow","swallowed"]
+        return min(unit1.InfluenceRadius,unit2.InfluenceRadius)^2*π
     else
 
     r₁ = unit1.InfluenceRadius
@@ -211,9 +231,6 @@ function getOverlapArea(unit1::Unit, unit2::Unit)
     y₂ = unit2.positionY
 
     d = sqrt((x₂ - x₁)^2 + (y₂ - y₁)^2)
-    d2 = sqrt((x₁ - x₂ )^2 + (y₁ - y₂)^2)
-
-    # println(d,"==", d2)
 
     d₁ = (r₁^2 - r₂^2 + d^2)/(2*d)
     d₂ = d - d₁
@@ -250,11 +267,21 @@ end
     # This translates into losses. Losses mean that the unit has less soldiers, which translates to less influence radius.      
 
     # we calculate the losses for each unit. the first unit being the one that is affected
+rand(.8:.0001:1.2)
 
-function calculateCombat(unit1::Unit, unit2::Unit)
+
+(2/(1+exp(-1*(100 -0))))
+
+function calculateCombat!(unit1::Unit, unit2::Unit)
+
+
 
     # get the area of the compat zone. 
     A = getOverlapArea(unit1, unit2)
+
+    if isnothing(A)
+        return unit1
+    else
 
     # get unit densit+ies 
     d₁ = unit1.soliderCnt/A
@@ -266,7 +293,14 @@ function calculateCombat(unit1::Unit, unit2::Unit)
 
  
 
-    pctInflicted = logistic(( unit2.combatStrength - unit1.combatStrength) ) * unit1.morale * min(unit1.supplies/unit1.soliderCnt,1.2) * (2/(1+exp(-1*(d₂-d₁ -0))))
+    pctInflicted = 
+            logistic(( unit2.combatStrength - unit1.combatStrength) ) *
+            unit1.morale * min(unit1.supplies/unit1.soliderCnt,1.2) *
+            (1/(1+exp(-1*(d₂-d₁ -0)))+0.5) * 
+            rand(.8:.0001:1.2)
+
+
+
     # pctSuppliesDestroyed = 0 # I want to add this in to make SpecOps a thing. 
     # suppliesGained = 0
     # If there is a high density diff, the smaller diff can make their supplies go further per casualty.
@@ -280,6 +314,7 @@ function calculateCombat(unit1::Unit, unit2::Unit)
     # println("pctInflicted = ",pctInflicted )
 
     return unit1
+    end
 
 end
 
@@ -361,23 +396,64 @@ end
 """
 This takes a unit and a point and moves it to that point based on the units speed.
 """
-function MoveToPoint(unit::Unit, x::Number, y::Number)
+function setMoveOrder!(unit::Unit, x::Number, y::Number, speed=missing)
+
+    unit.destinationX = x
+    unit.destinationY = y
+    if !ismissing(speed)
+        unit.speed = speed
+    end
+
+    return unit
+end
+function MoveToPoint!(unit::Unit)
+
+    speed = unit.speed
+
+    # first, lets check if the unit is engaged.
+    if unit.isEngaged
+        speed = speed/3
+    end
 
     # get the distance between the two points
-    distance = sqrt((unit.positionX - x)^2 + (unit.positionY - y)^2)
+    distance = sqrt((unit.positionX - unit.destinationX)^2 + (unit.positionY - unit.destinationY)^2)
     if distance <  unit.speed
-        teleportUnit!(unit, x, y)
+        teleportUnit!(unit, unit.destinationX, unit.destinationY)
         return
     else
+
         # move it towards the point. first get the unit vector from the unit to the desired point
-        v = [x - unit.positionX, y - unit.positionY]
+        v = [unit.destinationX - unit.positionX, unit.destinationY - unit.positionY]
         vNorm = v / norm(v)
         # move the unit in that direction
         teleportUnit!(unit, unit.positionX + vNorm[1] * unit.speed, unit.positionY + vNorm[2] * unit.speed)
-
+        # and remove supplies equal to 1 + 1/10th of the distance moved.
+        unit.supplies = max(unit.supplies - 1 - distance/10,0)
     end
 end
 
+function showFields(u;fields = [])
+    duds = []
+    _type = typeof(u)
+
+    if isempty(fields)
+        fields = fieldnames(_type)
+    else
+        duds = setdiff(fields,fieldnames(_type))
+        fields = intersect(fields,fieldnames(_type))
+    end
+
+    for i in fields
+        println(i, ": ", getfield(u,i))
 
 
+        if length(duds) > 0
+            println("The following fields are not valid fields for the $_type type: ",duds)
+            println("Valid fields are: ",fieldnames(_type))
+        end
+    end
+    return
+end
+# u1 = unit("Unit1")
+# showFields(u1,fields=[:name,])
 

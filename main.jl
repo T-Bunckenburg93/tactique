@@ -27,7 +27,7 @@ mutable struct Unit
     type::String
     team::String
     position::Point2f
-    destination::Union{Missing, Point2f}
+    destination::Point2f
     InfluenceRadius::Number # limited to density.
     bombardmentRadius::Union{Missing, Number}
     staringSoliderCnt::Int # 0-99999
@@ -109,11 +109,16 @@ function unit(
         supplies = 1200,
         pctInflicted = 0,
         suppliesConsumed = 0,
-        speed = 5,
+        speed = 6,
         maxSpeed = 5,
         isEngaged = false
 
         )
+
+        if ismissing(destination)
+            destination = position
+        end
+
     u = Unit(name,id, type, team, position, destination, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed, maxSpeed, isEngaged)
     # ensure that the unit meets required constrants
     changeInfluence!(u, InfluenceRadius)
@@ -474,6 +479,20 @@ function getNval(x,n=1)
 end
 
 
+"""
+Utility function for pulling out the ith unit from a list of units.
+"""
+function getUnit(activeUnits,i)
+    return activeUnits[i]
+end
+"""
+Utility function for putting a unit back into a list of units at point n
+    """
+function putUnit(activeUnits,i,u)
+    activeUnits[i] = u
+    return activeUnits
+end
+
 # Ok, so here we have some visualisation utilities:
 function createArrow(x1,y1,x2,y2;barWidth=nothing,noseLength=nothing,arrowWidth=nothing)
 
@@ -570,85 +589,136 @@ f
 end
 
 
-
 # add interactive map
 
 function plotInteractiveMap(activeUnits)
-    global idx
-    idx = Observable(0)
+
+    # create out observables? May need more?
+    global activeUnits
+
+    idx = Observable(1)
+    ActiveO = Observable(activeUnits)
+    CurrentUnit = @lift getUnit($ActiveO,$idx)
+    
     teamMap = Dict("team1" => "red", "team2" => "blue", "teamDev" => "pink")
-    # pull out the position info
+    speed_vals = [2, 4, 6, 8, 10, 20]
     
-    positions = []
+    teamColours = @lift [teamMap[i.team] for i in $ActiveO]
+    teamUnitNames = @lift  [i.name for  i in $ActiveO]
+    positions = @lift [i.position for i in $ActiveO]
+    destinations = @lift [i.destination for i in $ActiveO]
+    linePositions = @lift [(i.position,coalesce(i.destination,i.position)) for i in $ActiveO]
 
-    for i in activeUnits
-        if ismissing(i.destination)
-            push!(positions, (i.position,i.position))
-        else 
-            push!(positions, (i.position,i.destination))
-        end
-    end 
+    currentObjectSpeed_i = Observable{Any}(0.0)
+
+# When the current unit is updated, we need to update the menus
+# println("current unit: ",CurrentUnit[])
+    on(idx) do s
+        println(typeof(s))
+        println("selected unit: $idx")
+
+        currentObjectSpeed_i = findfirst( ==(to_value(CurrentUnit).speed), speed_vals)
+        speed__M.i_selected = currentObjectSpeed_i
+
+    end
     
-    # Make these observable
-    positions = Observable(positions)
-
-    getNval.(to_value(positions))
-
-    teamColours = [teamMap[i.team] for i in activeUnits]
-    teamUnitNames = [i.name for i in activeUnits]
-    InfluenceRadius = [i.InfluenceRadius for i in activeUnits]
-    pos = [i.position for i in activeUnits]
-
-
     # ok, so do the plotting things.
-    s = Scene(camera = campixel!, size = (800, 800))
+    # s = Scene(camera = campixel!, size = (800, 800))
+    s = Figure()
+    # Axis(s[1, 1], limits = ((-100, 100), (-100,100)))
+    ax = Axis(s[1, 2], limits = ((-100, 100), (-100,100)))
+    hidespines!(ax)
 
-    linesegments!(s,positions,  color = teamColours)
-    scatter!(s,getNval.(to_value(positions)), strokewidth = 3,  color = teamColours)
+    # Lets add menus
 
-    text!(s,getNval.(to_value(positions)), text = teamUnitNames, color = teamColours, align = (:center, :top))
+    # when I select a unit, I want to be able to change the attributes of that unit.
+
+    selectUnit__M = Menu(s,
+        options = zip(to_value(teamUnitNames),collect(1:length(to_value(teamUnitNames)))),
+        # selection = idx[]
+        )
+    
+    on(selectUnit__M.selection) do s
+        # println("selected unit: ",s)
+        idx[] = s
+
+    end
+
+    # now I want to add attributes of the selected unit that we can change.
+    # when IDX changes, this needs to update.
+
+    speed__M = Menu(s,
+        options = zip(string.(speed_vals),collect(1:length(to_value(speed_vals)))),
+        )
+
+    on(speed__M.selection) do s
+    println("speed change: Changing Unit ",CurrentUnit[].name," speed to : ",CurrentUnit[].speed)
+        cu = to_value(CurrentUnit)
+        cu.speed = speed_vals[s]
+        ActiveO[] = putUnit(activeUnits,idx[],cu)
+    end
+
+        
+
+    
+
+    s[1, 1] = vgrid!(
+        Label(s, "Unit:", width = nothing), 
+        selectUnit__M,
+        Label(s, "Attributes:", width = nothing),
+        speed__M
+        ;
+        tellheight = false, width = 200
+        )
+
+
+
+# Make the plots
+
+
+    linesegments!(linePositions,  color = to_value(teamColours))
+    scatter!(to_value(positions), strokewidth = 3,  color = to_value(teamColours))
+
+    text!(to_value(positions), text = to_value(teamUnitNames), color = to_value(teamColours), align = (:center, :top))
 
     # and add area of influence
     # arc!(i.position, i.InfluenceRadius, -π, π, color = teamMap[i.team], alpha = 0.5)
     for i in activeUnits
-        arc!(s,i.position, i.InfluenceRadius, -π, π, color = teamMap[i.team], alpha = 0.5)
+        arc!(i.position, i.InfluenceRadius, -π, π, color = teamMap[i.team], alpha = 0.5)
     end
 
-    # init the observable
-
+# Here are the keyboard interactions
 
     on(events(s).mousebutton, priority = 2) do event
 
-        
         if event.button == Mouse.left && event.action == Mouse.press
 
             plt, i = GLMakie.pick(s,10)
-            println(plt)
+            # println(plt)
             if plt isa Scatter{Tuple{Vector{Point{2, Float32}}}}
-                # println("changing idx: ",i)
-                idx[] = i
+    
+                # idx[] = i
+                # selectUnit__M.i_selected = i
+                selectUnit__M.i_selected = i # need     this to not do anything. 
             end
-
-            # println("idx is now: ",idx[])
-
         end
 
         # println("positions: ",positions)
 
         # if event.button == Mouse.right && event.action == Mouse.press && idx[] != 0
-        on(events(s).mouseposition, priority = 2) do mp
+        on(events(ax).mouseposition, priority = 3) do mp
             mb = events(s).mousebutton[]
-            if mb.button == Mouse.right && mb.action == Mouse.press && idx[] != 0
-                # println("destination is now: ",mp)
-                # println(typeof(mp))
-                v = to_value(positions) 
+            if mb.button == Mouse.right && mb.action == Mouse.press
 
-                # v[idx[]][2] = Point2f(mp)
-                v[idx[]] = (v[idx[]][1],Point2f(mp))
-                positions[] = v
-                # println("positions: ",positions)
-                notify(positions)
-                # println("positions: ",positions)
+                # get current unit and update destination
+                cu = to_value(CurrentUnit)
+                # println("current dest: ",cu.destination)
+                cu.destination = Point2f(mouseposition(ax))
+                CurrentUnit[] = cu
+
+                # push it back unto the active Unit, and update Observable
+                ActiveO[] = putUnit(activeUnits,idx[],cu)
+                notify(ActiveO)
 
             end
         end
@@ -656,5 +726,7 @@ function plotInteractiveMap(activeUnits)
     end
 
     display(s)
-    return positions
+    return to_value(ActiveO)
 end
+
+

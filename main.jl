@@ -468,6 +468,11 @@ end
 # u1 = unit("Unit1")
 # showFields(u1,fields=[:name,])
 
+    # function to pull out the first tuple, or position data. 
+function getNval(x,n=1)
+    return Point2f(x[n])
+end
+
 
 # Ok, so here we have some visualisation utilities:
 function createArrow(x1,y1,x2,y2;barWidth=nothing,noseLength=nothing,arrowWidth=nothing)
@@ -571,7 +576,9 @@ end
 function plotInteractiveMap(activeUnits)
     global idx
     idx = Observable(0)
+    teamMap = Dict("team1" => "red", "team2" => "blue", "teamDev" => "pink")
     # pull out the position info
+    
     positions = []
 
     for i in activeUnits
@@ -585,18 +592,27 @@ function plotInteractiveMap(activeUnits)
     # Make these observable
     positions = Observable(positions)
 
-    # function to pull out the first tuple, or position data. 
-    function getNval(x)
-        return Point2f(x[1])
-    end
     getNval.(to_value(positions))
+
+    teamColours = [teamMap[i.team] for i in activeUnits]
+    teamUnitNames = [i.name for i in activeUnits]
+    InfluenceRadius = [i.InfluenceRadius for i in activeUnits]
+    pos = [i.position for i in activeUnits]
+
 
     # ok, so do the plotting things.
     s = Scene(camera = campixel!, size = (800, 800))
 
-    scatter!(s,getNval.(to_value(positions)))
-    linesegments!(s,positions)
-    println("positions: ",positions)
+    linesegments!(s,positions,  color = teamColours)
+    scatter!(s,getNval.(to_value(positions)), strokewidth = 3,  color = teamColours)
+
+    text!(s,getNval.(to_value(positions)), text = teamUnitNames, color = teamColours, align = (:center, :top))
+
+    # and add area of influence
+    # arc!(i.position, i.InfluenceRadius, -π, π, color = teamMap[i.team], alpha = 0.5)
+    for i in activeUnits
+        arc!(s,i.position, i.InfluenceRadius, -π, π, color = teamMap[i.team], alpha = 0.5)
+    end
 
     # init the observable
 
@@ -638,7 +654,6 @@ function plotInteractiveMap(activeUnits)
         end
 
     end
-
 
     display(s)
     return positions

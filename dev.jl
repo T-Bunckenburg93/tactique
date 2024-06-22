@@ -1,4 +1,5 @@
 include("main.jl")
+GLMakie.activate!(inline=false)
 
 # ok so game loop. 
 
@@ -16,23 +17,20 @@ include("main.jl")
 
 # we will also plot the map.
 
-fieldnames(unit)
+# fieldnames(unit)
 
 # init the units. 
-inf1 = unit("rifles",team = "team1",combatStrength = 5, soliderCnt = 1000, staringSoliderCnt = 1000, InfluenceRadius = 5,supplies = 1000)
-recon1 = unit("recon",team = "team1",combatStrength = 15, soliderCnt = 100, staringSoliderCnt = 100, InfluenceRadius = 10,supplies = 100)
-
-teleportUnit!(inf1, -50, 0)
-teleportUnit!(recon1, -50, -30)
-
-inf2 = unit("rifles",team = "team2",combatStrength = 5, soliderCnt = 1000, staringSoliderCnt = 1000, InfluenceRadius = 5,supplies = 1000)
-recon2 = unit("recon",team = "team2",combatStrength = 15, soliderCnt = 100, staringSoliderCnt = 100, InfluenceRadius = 15,supplies = 100)
+inf1 = unit("rifles",team = "team1",speed = 20 ,supplies = 1000, position = Point2f(200,200))
+recon1 = unit("recon",team = "team1",combatStrength = 15, soliderCnt = 100, staringSoliderCnt = 100, InfluenceRadius = 10,supplies = 100, position = Point2f(80,20))
+inf2 = unit("rifles",team = "team2",combatStrength = 5, soliderCnt = 1000, staringSoliderCnt = 1000, InfluenceRadius = 5,supplies = 1000, position = Point2f(400,100))
+recon2 = unit("recon",team = "team2",combatStrength = 15, soliderCnt = 100, staringSoliderCnt = 100, InfluenceRadius = 15,supplies = 100, position = Point2f(400,120))
 
 
-teleportUnit!(inf2, 50, 0)
-teleportUnit!(recon2, 50, 30)
-
-activeUnits = [inf1,recon1,inf2,recon2]
+activeUnits = [
+    inf1,
+    recon1,
+    inf2,recon2
+    ]
 graveyard = []
 
 plotMap(activeUnits)
@@ -40,38 +38,90 @@ plotMap(activeUnits)
 
 # GLMakie.activate!(inline=false)
 
-# I want a function that takes in a unit and a point, 
-# and will move the unit to that point based on the units speed
-# currently will not use the map, but will have to eventually. 
-"""
-This takes a unit and a point and moves it to that point based on the units speed.
-"""
-function MoveToPoint(unit::Unit, x::Number, y::Number)
+# ok, so I want some code to deal with engagements and combat.
+# when engaging, units move much more slowly to not take a massive combat penalty.
+# perhaps 1/3 speed? towards, and 1/2 speed away? or can retreat at full speed for high losses.
 
-    # get the distance between the two points
-    distance = sqrt((unit.positionX - x)^2 + (unit.positionY - y)^2)
-    if distance <  unit.speed
-        teleportUnit!(unit, x, y)
-        return
-    else
-        # move it towards the point. first get the unit vector from the unit to the desired point
-        v = [x - unit.positionX, y - unit.positionY]
-        vNorm = v / norm(v)
-        # move the unit in that direction
-        teleportUnit!(unit, unit.positionX + vNorm[1] * unit.speed, unit.positionY + vNorm[2] * unit.speed)
+# Lets do this later....
 
+positions_O = []
+
+function tick()
+    global positions_O, activeUnits, graveyard
+    # moof all units to their move orders.
+
+    # println(size(activeUnits,1))
+    if typeof(positions_O) <: Observable
+        println("updating the positions")
+
+        newPos = to_value(positions_O)
+
+        print("newpos?: ",newPos)
+
+        for i in 1:size(activeUnits,1)
+            activeUnits[i].position = Point2f(newPos[i][1])
+            activeUnits[i].destination = Point2f(newPos[i][2])
+        end
     end
+
+    for u in activeUnits
+        showFields(u,fields = [:position,:destination])
+        MoveToPoint!(u)
+    end
+    
+    # check to see if any units are overlapping, and apply engaged status.
+    for i in activeUnits
+        for j in activeUnits
+            if i != j && i.team != j.team
+                if checkOverlap(i,j) in ["overlap","swallow","swallowed"]
+                    i.isEngaged = true
+                else 
+                    i.isEngaged = false
+                end
+                calculateCombat!(i,j)
+            end
+        end
+    end
+    
+    # and apply them. 
+    for i in activeUnits
+        applyCombat!(i)
+        # and see if any have died
+        if killCheck(i)
+            push!(graveyard,i)
+            filter!(x -> x != i, activeUnits)
+        end
+    end
+    
+    positions_O = plotInteractiveMap(activeUnits)
 end
 
 
+tick()
+
+# positions_O
+
+# v = to_value(positions_O) 
+
+# v[1] = (v[1][1],Point2f(0,0))
+
+# v
+# v[idx[]] = (v[idx[]][1],Point2f(mp))
+
+# typeof(positions_O) <: Observable
+
+inf1.position
 
 
+# inf1 = unit("rifles",team = "team1",combatStrength = 5, soliderCnt = 5000, staringSoliderCnt = 1000, InfluenceRadius = 5,supplies = 1000, speed = 2,position = Point2f(30,0)) 
+# inf2 = unit("rifle2",team = "team2",combatStrength = 5, soliderCnt = 1000, staringSoliderCnt = 1000, InfluenceRadius = 5,supplies = 1000, speed = 2,position= Point2f(-30,0) )
+# activeUnits = [inf1,inf2]
+# graveyard = []
 
-inf1 = unit("rifles",team = "team1",combatStrength = 5, soliderCnt = 1000, staringSoliderCnt = 1000, InfluenceRadius = 5,supplies = 1000) 
+# setMoveOrder!(inf1,0,0)
+# setMoveOrder!(inf2,-100,0)
+# # setMoveOrder!(inf2,0,0)
+# plotMap(activeUnits)
 
-activeUnits = [inf1]
-graveyard = []
 
-plotMap(activeUnits)
-MoveToPoint(inf1,0,100)
 

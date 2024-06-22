@@ -26,10 +26,8 @@ mutable struct Unit
     id::Int
     type::String
     team::String
-    positionX::Number
-    positionY::Number
-    destinationX::Union{Missing, Number}
-    destinationY::Union{Missing, Number}
+    position::Point2f
+    destination::Union{Missing, Point2f}
     InfluenceRadius::Number # limited to density.
     bombardmentRadius::Union{Missing, Number}
     staringSoliderCnt::Int # 0-99999
@@ -43,6 +41,7 @@ mutable struct Unit
     maxSpeed::Number
     isEngaged::Bool
 end
+
 
 """
 function that pulls out the values of a unit.
@@ -59,7 +58,6 @@ function uVals(u::Unit)
     return v
 end
     
-
 
 """
 This changes the influence radius for a unit. Depending on the unit there are min and max densities.
@@ -90,7 +88,7 @@ function changeInfluence!(unit::Unit, desiredInfluence::Number)
 
     return unit
 end
-
+# Point2f(0,0)
 
 """
 Constructor fucntion for the unit type. 
@@ -100,10 +98,8 @@ function unit(
         id::Int = rand(Int),
         type="debugInfantry", 
         team="teamDev", 
-        positionX=0, 
-        positionY=0,
-        destinationX=missing,
-        destinationY=missing,
+        position = Point2f(0,0),
+        destination = missing,
         InfluenceRadius=10, 
         bombardmentRadius=0,
         staringSoliderCnt=1000,
@@ -118,7 +114,7 @@ function unit(
         isEngaged = false
 
         )
-    u = Unit(name,id, type, team, positionX, positionY, destinationX,destinationY, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed, maxSpeed, isEngaged)
+    u = Unit(name,id, type, team, position, destination, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed, maxSpeed, isEngaged)
     # ensure that the unit meets required constrants
     changeInfluence!(u, InfluenceRadius)
 
@@ -128,18 +124,25 @@ end
 
 """
 # basic movement function that sets the position that the unit ends up at. 
+works with either a point or x,y coords.
 """
+function teleportUnit!(unit::Unit, p::Point2f)
+    unit.position = p
+    return unit
+end
 function teleportUnit!(unit::Unit, x::Number, y::Number)
-    unit.positionX = x
-    unit.positionY = y
+    p = Point2f(x,y)
+    teleportUnit!(unit,p)
     return unit
 end
 
 
 
+
 # I want to see if unit1's radius overlaps with unit2
-function checkOverlap(unit1::Unit, unit2::Unit,print=false)
-    d = sqrt((unit1.positionX - unit2.positionX)^2 + (unit1.positionY - unit2.positionY)^2)
+function checkOverlap(unit1::Unit, unit2::Unit;print=false)
+
+    d = sqrt((unit1.position[1] - unit2.position[1])^2 + (unit1.position[2] - unit2.position[2])^2)
     r₁ = unit1.InfluenceRadius
     r₂ = unit2.InfluenceRadius
 
@@ -176,6 +179,11 @@ function checkOverlap(unit1::Unit, unit2::Unit,print=false)
 
 end
 
+# u1 = unit("u1")
+# u2 = unit("u2")
+# checkOverlap(u1,u2,print=true)
+
+
 
 """
 finds the two sets of points where two units sphere of influence intersect.
@@ -189,11 +197,11 @@ function getIntersectionPoints(unit1::Unit, unit2::Unit)
 
         r₁ = unit1.InfluenceRadius
         r₂ = unit2.InfluenceRadius
-        x₁ = unit1.positionX
-        y₁ = unit1.positionY
+        x₁ = unit1.position[1]
+        y₁ = unit1.position[2]
 
-        x₂ = unit2.positionX
-        y₂ = unit2.positionY
+        x₂ = unit2.position[1]
+        y₂ = unit2.position[2]
 
         R = sqrt((x₂ - x₁)^2 + (y₂ - y₁)^2)
 
@@ -225,10 +233,10 @@ function getOverlapArea(unit1::Unit, unit2::Unit)
 
     r₁ = unit1.InfluenceRadius
     r₂ = unit2.InfluenceRadius
-    x₁ = unit1.positionX
-    y₁ = unit1.positionY
-    x₂ = unit2.positionX
-    y₂ = unit2.positionY
+    x₁ = unit1.position[1]
+    y₁ = unit1.position[2]
+    x₂ = unit2.position[1]
+    y₂ = unit2.position[2]
 
     d = sqrt((x₂ - x₁)^2 + (y₂ - y₁)^2)
 
@@ -345,38 +353,14 @@ function plotUnits(u1::Unit, u2::Unit, i=0)
     f = Figure()
     Axis(f[1, 1], limits = ((-100, 100), (-100,100)))
 
-    arc!(Point2f(u1.positionX, u1.positionY), u1.InfluenceRadius, -π, π)
-    arc!(Point2f(u2.positionX, u2.positionY), u2.InfluenceRadius, -π, π)
+    arc!(Point2f(u1.position[1], u1.position[2]), u1.InfluenceRadius, -π, π)
+    arc!(Point2f(u2.position[1], u2.position[2]), u2.InfluenceRadius, -π, π)
 
     Label(f[0, 0], "rnd $i")
     f
 
 end
 
-function plotMap(activeUnits)
-
-    f = Figure()
-    Axis(f[1, 1], limits = ((-100, 100), (-100,100)))
-
-    teamMap = Dict("team1" => "red", "team2" => "blue")
-
-    # plot the radias of influence for each unit 
-    for i in activeUnits
-        arc!(Point2f(i.positionX, i.positionY), i.InfluenceRadius, -π, π, color = teamMap[i.team], alpha = 0.5)
-    end
-
-    # plot the positions of the units 
-    for i in activeUnits
-        text!(
-            i.positionX, i.positionY,
-            text = i.name,
-            color = teamMap[i.team],
-            align = (:center, :center),
-        )
-    end
-    # string(i.name,"\n",i.type,"\n",i.team)
-f
-end
 
 # I want to be able to kill units if they have lost 75% of their soldiers
 # or if morale is too low. TBD
@@ -396,17 +380,36 @@ end
 """
 This takes a unit and a point and moves it to that point based on the units speed.
 """
-function setMoveOrder!(unit::Unit, x::Number, y::Number, speed=missing)
-
-    unit.destinationX = x
-    unit.destinationY = y
+function  setMoveOrder!(unit::Unit,position::Point2f; speed=missing)
+    
+    unit.destination = position
     if !ismissing(speed)
         unit.speed = speed
     end
 
     return unit
+    
 end
+function setMoveOrder!(unit::Unit, x::Number, y::Number; speed=missing)
+    p = Point2f(x,y)
+    setMoveOrder!(unit,p,speed=speed)
+
+    return 
+end
+function setMoveOrder!(unit::Observable, x::Number, y::Number; speed=missing)
+    u = to_value(unit)
+    p = Point2f(x,y)
+    setMoveOrder!(u,p,speed=speed)
+    unit[] = u
+    return 
+end
+
+
 function MoveToPoint!(unit::Unit)
+
+    if ismissing(unit.destination)
+        return
+    end
 
     speed = unit.speed
 
@@ -416,17 +419,17 @@ function MoveToPoint!(unit::Unit)
     end
 
     # get the distance between the two points
-    distance = sqrt((unit.positionX - unit.destinationX)^2 + (unit.positionY - unit.destinationY)^2)
+    distance = sqrt((unit.position[1] - unit.destination[1])^2 + (unit.position[2] - unit.destination[2])^2)
     if distance <  unit.speed
-        teleportUnit!(unit, unit.destinationX, unit.destinationY)
+        teleportUnit!(unit, unit.destination)
         return
     else
 
         # move it towards the point. first get the unit vector from the unit to the desired point
-        v = [unit.destinationX - unit.positionX, unit.destinationY - unit.positionY]
+        v = [unit.destination[1] - unit.position[1], unit.destination[2] - unit.position[2]]
         vNorm = v / norm(v)
         # move the unit in that direction
-        teleportUnit!(unit, unit.positionX + vNorm[1] * unit.speed, unit.positionY + vNorm[2] * unit.speed)
+        teleportUnit!(unit, unit.position[1] + vNorm[1] * unit.speed, unit.position[2] + vNorm[2] * unit.speed)
         # and remove supplies equal to 1 + 1/10th of the distance moved.
         unit.supplies = max(unit.supplies - 1 - distance/10,0)
     end
@@ -454,6 +457,189 @@ function showFields(u;fields = [])
     end
     return
 end
+
+function falseIfMissing(x)
+    if ismissing(x)
+        return false
+    else
+        return true
+    end
+end
 # u1 = unit("Unit1")
 # showFields(u1,fields=[:name,])
 
+
+# Ok, so here we have some visualisation utilities:
+function createArrow(x1,y1,x2,y2;barWidth=nothing,noseLength=nothing,arrowWidth=nothing)
+
+    VectorLen = sqrt((x1-x2)^2 + (y1-y2)^2)
+    UnitVector = ((x2-x1)/VectorLen , (y2-y1)/VectorLen)
+
+    if isnothing(barWidth)
+        barWidth = 1
+    end
+
+    if isnothing(noseLength)
+        noseLength = 1
+    end
+
+    if isnothing(arrowWidth)
+        arrowWidth = 2
+    end
+
+    poly = []
+
+    push!(poly,Point2f(x2,y2))
+
+    # Get the nose length, back from the tip, to find this midpoint
+    ArrowMiddlePoint = (x2 - noseLength * UnitVector[1] , y2 - noseLength * UnitVector[2] ) 
+    
+    # println("Arrow from ($x1,$y1), ($x2,$y2)")
+    # println("VectorLen = $VectorLen")
+    # println("UnitVector = $UnitVector")
+    # println("ArrowMiddlePoint = $ArrowMiddlePoint")
+
+    perp = (-UnitVector[2],UnitVector[1])
+
+    # get the arrowhead
+    push!(poly, Point2f(ArrowMiddlePoint[1] - arrowWidth/2*perp[1], ArrowMiddlePoint[2] - arrowWidth/2*perp[2]))
+    push!(poly, Point2f(ArrowMiddlePoint[1] - barWidth/2*perp[1], ArrowMiddlePoint[2] - barWidth/2*perp[2]))
+
+    # get the tail of the arrowhead bar
+    push!(poly, Point2f(x1 - barWidth/2*perp[1], y1 - barWidth/2*perp[2]))
+    push!(poly, Point2f(x1 + barWidth/2*perp[1], y1 + barWidth/2*perp[2]))
+
+    # and the other side of the arrowhead
+    push!(poly, Point2f(ArrowMiddlePoint[1] + (barWidth/2)*perp[1], ArrowMiddlePoint[2] + (barWidth/2)*perp[2]))
+    push!(poly, Point2f(ArrowMiddlePoint[1] + (arrowWidth/2)*perp[1], ArrowMiddlePoint[2] + (arrowWidth/2)*perp[2]))
+
+    # and finish it off at the nose
+    push!(poly,Point2f(x2,y2))
+
+    # and make it point
+    return Point2f.(poly)
+
+end
+
+function plotMap(activeUnits)
+
+    f = Figure()
+    Axis(f[1, 1], limits = ((-100, 100), (-100,100)))
+
+    teamMap = Dict("team1" => "red", "team2" => "blue", "teamDev" => "pink")
+
+    # plot the radias of influence for each unit 
+    for o in to_value(activeUnits)
+        i = to_value(o)
+        arc!(i.position, i.InfluenceRadius, -π, π, color = teamMap[i.team], alpha = 0.5)
+    end
+
+    # plot the positions of the units 
+    for o in activeUnits
+        i = to_value(o)
+        text!(
+            i.position,
+            text = i.name,
+            color = teamMap[i.team],
+            align = (:center, :center),
+        )
+    end
+
+    # and plot the movement arrows
+    for o in activeUnits
+        i = to_value(o)
+        # println(i.destination)
+        if !ismissing(i.destination) || falseIfMissing(i.destination != i.position)
+            # lines!(
+            #     [i.position,
+            #     i.destination],
+            #     color = teamMap[i.team],
+            # )
+            # Add an arrowhead at the 'to' point
+            poly!(createArrow(i.position[1] , i.position[2], i.destination[1],i.destination[2]; barWidth = 0.4,arrowWidth = 2, noseLength = 4  ), color = teamMap[i.team])
+            # barWidth=nothing,noseLength=nothing,arrowWidth=nothing
+        end
+    end
+    # string(i.name,"\n",i.type,"\n",i.team)
+f
+end
+
+
+
+# add interactive map
+
+function plotInteractiveMap(activeUnits)
+    global idx
+    idx = Observable(0)
+    # pull out the position info
+    positions = []
+
+    for i in activeUnits
+        if ismissing(i.destination)
+            push!(positions, (i.position,i.position))
+        else 
+            push!(positions, (i.position,i.destination))
+        end
+    end 
+    
+    # Make these observable
+    positions = Observable(positions)
+
+    # function to pull out the first tuple, or position data. 
+    function getNval(x)
+        return Point2f(x[1])
+    end
+    getNval.(to_value(positions))
+
+    # ok, so do the plotting things.
+    s = Scene(camera = campixel!, size = (800, 800))
+
+    scatter!(s,getNval.(to_value(positions)))
+    linesegments!(s,positions)
+    println("positions: ",positions)
+
+    # init the observable
+
+
+    on(events(s).mousebutton, priority = 2) do event
+
+        
+        if event.button == Mouse.left && event.action == Mouse.press
+
+            plt, i = GLMakie.pick(s,10)
+            println(plt)
+            if plt isa Scatter{Tuple{Vector{Point{2, Float32}}}}
+                # println("changing idx: ",i)
+                idx[] = i
+            end
+
+            # println("idx is now: ",idx[])
+
+        end
+
+        # println("positions: ",positions)
+
+        # if event.button == Mouse.right && event.action == Mouse.press && idx[] != 0
+        on(events(s).mouseposition, priority = 2) do mp
+            mb = events(s).mousebutton[]
+            if mb.button == Mouse.right && mb.action == Mouse.press && idx[] != 0
+                # println("destination is now: ",mp)
+                # println(typeof(mp))
+                v = to_value(positions) 
+
+                # v[idx[]][2] = Point2f(mp)
+                v[idx[]] = (v[idx[]][1],Point2f(mp))
+                positions[] = v
+                # println("positions: ",positions)
+                notify(positions)
+                # println("positions: ",positions)
+
+            end
+        end
+
+    end
+
+
+    display(s)
+    return positions
+end

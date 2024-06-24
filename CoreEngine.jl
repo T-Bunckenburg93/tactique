@@ -50,6 +50,118 @@ end
 # f.runTime
 # f.size
 
+"""
+# This is a simple implementation of a unit in a game.
+
+Name: Name of the Unit
+id: uniquely generated Int to identify the unit
+type: type of unit. inf/tank/recon
+team: team the unit belongs to
+positionX/positionY: xy coords of the unit
+InfluenceRadius: the radius of influence that the unit holds/contests
+soliderCnt: number of soldiers in the unit. this effects the size of the influence radius.
+combatStrength: the combat strength modifier of the unit
+morale: the morale modifier of the unit
+supplies: the supplies that the unit has to engage in combat.
+
+
+"""
+mutable struct Unit
+
+    name::String
+    id::Int
+    type::String
+    team::String
+    position::Point2f
+    destination::Point2f
+    vision::Number
+    InfluenceRadius::Number # limited by density.
+    bombardmentRadius::Union{Missing, Number}
+    staringSoliderCnt::Int # 0-99999
+    soliderCnt::Int # 0-99999
+    minDensity::Int # 0,1,2
+    combatStrength::Number # 0,1,2
+    morale::Number # 0,1,2
+    supplies::Number
+    pctInflicted::Number
+    suppliesConsumed::Number
+    speed::Number
+    maxSpeed::Number
+    isEngaged::Bool
+
+end
+
+"""
+Constructor fucntion for the unit type. 
+"""
+function unit(
+        name::String; 
+        id::Int = rand(Int),
+        type="debugInfantry", 
+        team="teamDev", 
+        position = Point2f(0,0),
+        destination = missing,
+        vision = 2,
+        InfluenceRadius=10, 
+        bombardmentRadius=0,
+        staringSoliderCnt=100,
+        soliderCnt=100,
+        minDensity = 4,
+        combatStrength=5, 
+        morale=1,
+        supplies = 1200,
+        pctInflicted = 0,
+        suppliesConsumed = 0,
+        speed = 6,
+        maxSpeed = 5,
+        isEngaged = false
+        )
+
+        if ismissing(destination)
+            destination = position
+        end
+
+        # construct the unit here
+    u = Unit(
+            name,
+            id,
+            type, 
+            team, 
+            position, 
+            destination,
+            vision, 
+            InfluenceRadius,
+            bombardmentRadius, 
+            staringSoliderCnt, 
+            soliderCnt,
+            minDensity,
+            combatStrength, 
+            morale, 
+            supplies, 
+            pctInflicted, 
+            suppliesConsumed, 
+            speed, 
+            maxSpeed, 
+            isEngaged
+            )
+    # ensure that the unit meets required constrants,
+    changeInfluence!(u, InfluenceRadius)
+
+    return u
+end
+
+"""
+function that pulls out the values of a unit.
+    and throws them into a vector.
+"""
+function uVals(u::Unit)
+    v = []
+    for i in fieldnames(Unit)
+
+        push!(v, getfield(u,i))
+    end
+    return v
+end
 
 # to see what areas a unit can influence, we can just draw a circle around its location.
 # Then we get all the points, and these are the points that the unit will influence.
@@ -93,20 +205,27 @@ function getPointsFromMap(x::Number,y::Number,r::Number; _battleMap::BattleMap =
     end
     return points;
 end
+
 # BATTLEMAP = battleMap(1000,1000)
-# getPointsFromMap(1,1,1)
+getPointsFromMap(1,1,0)
+getPointsFromMap(1,1,1)
+getPointsFromMap(1.5,1,0)
 # getPointsFromMap(10,10,1)
 
-
-
 """
-    getInfluencePoints(unit::Unit)
+    getInfluencePoints(unit::Unit,influence = missing)
     This returns a list of points that are within or on a circle of radius unit.InfluenceRadius centered at unit.position.
     These points must be inside the battlemap, which by default is 1000x1000
+    you can check the influence of a unit by changing the influence parameter.
 
     Points are returned as CartesianIndex{2}[] so that they can be easily applied to the BattleMap.points array.
 """
-getInfluencePoints(unit::Unit) = getPointsFromMap(unit.position[1],unit.position[2],unit.InfluenceRadius)
+function getInfluencePoints(unit::Unit,influence = -1.0)
+    if influence == -1.0
+        influence = unit.InfluenceRadius
+    end
+    getPointsFromMap(unit.position[1],unit.position[2],influence)
+end
 
 """
     getVisionPoints(unit::Unit)
@@ -125,5 +244,80 @@ getVisionPoints(unit::Unit) = getPointsFromMap(unit.position[1],unit.position[2]
 # # this will give us the points that are only in vision, but not in influence.
 # visionOnlyPoints = setdiff(visionPoints,influencePoints)
 
+"""
+This changes the influence radius for a unit. Depending on the unit there are min and max densities.
+    for debugInfantry these are 1-100 soldiers/Area
+"""
+function changeInfluence!(unit::Unit, desiredInfluence::Number)
+
+    # get the current unit count and calc min/max influence
+    println("Unit: ", unit.name, " has ", unit.soliderCnt, " soldiers.")
+    minInfluence = sqrt(unit.soliderCnt/100*π)
+    maxInfluence = sqrt(unit.soliderCnt/1*π)
 
 
+    if desiredInfluence >= minInfluence && desiredInfluence <= maxInfluence 
+        unit.InfluenceRadius = desiredInfluence
+    else
+        if desiredInfluence < minInfluence
+            println("Desired influence is too small. Setting to min influence based on density 100.")
+            unit.InfluenceRadius = minInfluence
+
+        elseif desiredInfluence > maxInfluence
+            println("Desired influence is too large. Setting to max influence based on density 1.")
+            unit.InfluenceRadius = maxInfluence
+        end
+    end
+
+    return unit
+end
+# Point2f(0,0)
+
+function changeInfluence2!(u::Unit, desiredInfluence::Number)
+
+    # get the current max number of points that the unit can influence.
+    maxPoints = max(u.soliderCnt / u.minDensity,1)
+    desiredInfluencePoints = getInfluencePoints(u,desiredInfluence)
+    
+    desiredInfluencePoints = getInfluencePoints(u,desiredInfluence)
+    if length(desiredInfluencePoints) < maxPoints
+        u.InfluenceRadius = di
+    else
+        # println("Desired influence is too large.")
+    # Else we step down until we find a radius that fits.
+    # In the case of a tie at influence 0 and pos(0.5),  rounding sorts it out
+        for i in di:-1:0
+            desiredInfluencePoints = getInfluencePoints(u,i)
+
+            # println("Checking influence at ",i," with ",length(desiredInfluencePoints)," points.")
+
+            if length(desiredInfluencePoints) < maxPoints
+                println("Desired influence is too large, Setting influence to ",i)
+                # u.InfluenceRadius = i
+                break
+            end
+        end
+    end
+    return u
+end
+
+# u = unit("hi",InfluenceRadius = 10, soliderCnt=1000, position = Point2f(100,100))
+# changeInfluence2!(u,10)
+
+
+"""
+# basic movement function that sets the position that the unit ends up at. 
+works with either a point or x,y coords.
+"""
+function teleportUnit!(unit::Unit, p::Point2f)
+    unit.position = p
+    return unit
+end
+function teleportUnit!(unit::Unit, x::Number, y::Number)
+    p = Point2f(x,y)
+    teleportUnit!(unit,p)
+    return unit
+end
+
+
+Along with points, we also see 

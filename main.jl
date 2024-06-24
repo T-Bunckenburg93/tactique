@@ -4,148 +4,20 @@ import LinearAlgebra: norm
 import Base: show
 
 GLMakie.activate!(inline=true)
-"""
-# This is a simple implementation of a unit in a game.
-
-Name: Name of the Unit
-id: uniquely generated Int to identify the unit
-type: type of unit. inf/tank/recon
-team: team the unit belongs to
-positionX/positionY: xy coords of the unit
-InfluenceRadius: the radius of influence that the unit holds/contests
-soliderCnt: number of soldiers in the unit. this effects the size of the influence radius.
-combatStrength: the combat strength modifier of the unit
-morale: the morale modifier of the unit
-supplies: the supplies that the unit has to engage in combat.
 
 
-"""
-mutable struct Unit
-
-    name::String
-    id::Int
-    type::String
-    team::String
-    position::Point2f
-    destination::Point2f
-    vision::Number
-    InfluenceRadius::Number # limited to density.
-    bombardmentRadius::Union{Missing, Number}
-    staringSoliderCnt::Int # 0-99999
-    soliderCnt::Int # 0-99999
-    combatStrength::Number # 0,1,2
-    morale::Number # 0,1,2
-    supplies::Number
-    pctInflicted::Number
-    suppliesConsumed::Number
-    speed::Number
-    maxSpeed::Number
-    isEngaged::Bool
-
-end
-
-"""
-function that pulls out the values of a unit.
-    and throws them into a vector.
-"""
-function uVals(u::Unit)
-    v = []
-    for i in fieldnames(Unit)
-
-        push!(v, getfield(u,i))
-    end
-    return v
-end
 
 
-"""
-This changes the influence radius for a unit. Depending on the unit there are min and max densities.
-    for debugInfantry these are 1-100 soldiers/Area
-"""
-function changeInfluence!(unit::Unit, desiredInfluence::Number)
-
-    # get the current unit count and calc min/max influence
-    println("Unit: ", unit.name, " has ", unit.soliderCnt, " soldiers.")
-    minInfluence = sqrt(unit.soliderCnt/100*π)
-    maxInfluence = sqrt(unit.soliderCnt/1*π)
-
-    # println("minInfluence: ", minInfluence)
-    # println("maxInfluence: ", maxInfluence)
-
-    if desiredInfluence >= minInfluence && desiredInfluence <= maxInfluence 
-        unit.InfluenceRadius = desiredInfluence
-    else
-        if desiredInfluence < minInfluence
-            println("Desired influence is too small. Setting to min influence based on density 100.")
-            unit.InfluenceRadius = minInfluence
-
-        elseif desiredInfluence > maxInfluence
-            println("Desired influence is too large. Setting to max influence based on density 1.")
-            unit.InfluenceRadius = maxInfluence
-        end
-    end
-
-    return unit
-end
-# Point2f(0,0)
-
-"""
-Constructor fucntion for the unit type. 
-"""
-function unit(
-        name::String; 
-        id::Int = rand(Int),
-        type="debugInfantry", 
-        team="teamDev", 
-        position = Point2f(0,0),
-        destination = missing,
-        vision = 2,
-        InfluenceRadius=10, 
-        bombardmentRadius=0,
-        staringSoliderCnt=1000,
-        soliderCnt=1000, 
-        combatStrength=5, 
-        morale=1,
-        supplies = 1200,
-        pctInflicted = 0,
-        suppliesConsumed = 0,
-        speed = 6,
-        maxSpeed = 5,
-        isEngaged = false
-
-        )
-
-        if ismissing(destination)
-            destination = position
-        end
-
-    u = Unit(name,id, type, team, position, destination,vision, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed, maxSpeed, isEngaged)
-    # ensure that the unit meets required constrants,
-    changeInfluence!(u, InfluenceRadius)
-
-    return u
-end
 
 
-"""
-# basic movement function that sets the position that the unit ends up at. 
-works with either a point or x,y coords.
-"""
-function teleportUnit!(unit::Unit, p::Point2f)
-    unit.position = p
-    return unit
-end
-function teleportUnit!(unit::Unit, x::Number, y::Number)
-    p = Point2f(x,y)
-    teleportUnit!(unit,p)
-    return unit
-end
+
+
 
 
 
 
 # I want to see if unit1's radius overlaps with unit2
-function checkOverlap(unit1::Unit, unit2::Unit;print=false)
+function checkOverlapR(unit1::Unit, unit2::Unit;print=false)
 
     d = sqrt((unit1.position[1] - unit2.position[1])^2 + (unit1.position[2] - unit2.position[2])^2)
     r₁ = unit1.InfluenceRadius
@@ -438,44 +310,6 @@ function MoveToPoint!(unit::Unit)
         # and remove supplies equal to 1 + 1/10th of the distance moved.
         unit.supplies = max(unit.supplies - 1 - distance/10,0)
     end
-end
-
-function showFields(u;fields = [])
-    duds = []
-    _type = typeof(u)
-
-    if isempty(fields)
-        fields = fieldnames(_type)
-    else
-        duds = setdiff(fields,fieldnames(_type))
-        fields = intersect(fields,fieldnames(_type))
-    end
-
-    for i in fields
-        println(i, ": ", getfield(u,i))
-
-
-        if length(duds) > 0
-            println("The following fields are not valid fields for the $_type type: ",duds)
-            println("Valid fields are: ",fieldnames(_type))
-        end
-    end
-    return
-end
-
-function falseIfMissing(x)
-    if ismissing(x)
-        return false
-    else
-        return true
-    end
-end
-# u1 = unit("Unit1")
-# showFields(u1,fields=[:name,])
-
-    # function to pull out the first tuple, or position data. 
-function getNval(x,n=1)
-    return Point2f(x[n])
 end
 
 

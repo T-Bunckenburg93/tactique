@@ -28,6 +28,7 @@ mutable struct Unit
     team::String
     position::Point2f
     destination::Point2f
+    vision::Number
     InfluenceRadius::Number # limited to density.
     bombardmentRadius::Union{Missing, Number}
     staringSoliderCnt::Int # 0-99999
@@ -40,24 +41,22 @@ mutable struct Unit
     speed::Number
     maxSpeed::Number
     isEngaged::Bool
-end
 
+end
 
 """
 function that pulls out the values of a unit.
-    and throws them into a vector. Can be used to comapre the equality of units.
+    and throws them into a vector.
 """
 function uVals(u::Unit)
-
     v = []
     for i in fieldnames(Unit)
 
         push!(v, getfield(u,i))
-        
     end
     return v
 end
-    
+
 
 """
 This changes the influence radius for a unit. Depending on the unit there are min and max densities.
@@ -100,6 +99,7 @@ function unit(
         team="teamDev", 
         position = Point2f(0,0),
         destination = missing,
+        vision = 2,
         InfluenceRadius=10, 
         bombardmentRadius=0,
         staringSoliderCnt=1000,
@@ -119,8 +119,8 @@ function unit(
             destination = position
         end
 
-    u = Unit(name,id, type, team, position, destination, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed, maxSpeed, isEngaged)
-    # ensure that the unit meets required constrants
+    u = Unit(name,id, type, team, position, destination,vision, InfluenceRadius,bombardmentRadius, staringSoliderCnt, soliderCnt, combatStrength, morale, supplies, pctInflicted, suppliesConsumed, speed, maxSpeed, isEngaged)
+    # ensure that the unit meets required constrants,
     changeInfluence!(u, InfluenceRadius)
 
     return u
@@ -606,7 +606,6 @@ function plotInteractiveMap(activeUnits)
     teamColours = @lift [teamMap[i.team] for i in $ActiveO]
     teamUnitNames = @lift  [i.name for  i in $ActiveO]
     positions = @lift [i.position for i in $ActiveO]
-    destinations = @lift [i.destination for i in $ActiveO]
     linePositions = @lift [(i.position,coalesce(i.destination,i.position)) for i in $ActiveO]
 
     currentObjectSpeed_i = Observable{Any}(0.0)
@@ -624,9 +623,14 @@ function plotInteractiveMap(activeUnits)
     
     # ok, so do the plotting things.
     # s = Scene(camera = campixel!, size = (800, 800))
-    s = Figure()
+    s = Figure(size = (1280, 800))
     # Axis(s[1, 1], limits = ((-100, 100), (-100,100)))
-    ax = Axis(s[1, 2], limits = ((-100, 100), (-100,100)))
+    ax = Axis(s[1, 2], limits = ((-150, 150), (-150,150)), aspect = 1)
+    # println("interaction: ",interactions(ax))
+    deregister_interaction!(ax, :rectanglezoom)
+    # deregister_interaction!(ax, :dragpan)
+
+
     hidespines!(ax)
 
     # Lets add menus
@@ -648,8 +652,8 @@ function plotInteractiveMap(activeUnits)
     # when IDX changes, this needs to update.
 
     speed__M = Menu(s,
-        options = zip(string.(speed_vals),collect(1:length(to_value(speed_vals)))),
-        )
+        options = zip(string.("Speed ", speed_vals),collect(1:length(to_value(speed_vals)))),
+        )   
 
     on(speed__M.selection) do s
     println("speed change: Changing Unit ",CurrentUnit[].name," speed to : ",CurrentUnit[].speed)
@@ -657,9 +661,6 @@ function plotInteractiveMap(activeUnits)
         cu.speed = speed_vals[s]
         ActiveO[] = putUnit(activeUnits,idx[],cu)
     end
-
-        
-
     
 
     s[1, 1] = vgrid!(
@@ -671,10 +672,7 @@ function plotInteractiveMap(activeUnits)
         tellheight = false, width = 200
         )
 
-
-
 # Make the plots
-
 
     linesegments!(linePositions,  color = to_value(teamColours))
     scatter!(to_value(positions), strokewidth = 3,  color = to_value(teamColours))
@@ -691,15 +689,13 @@ function plotInteractiveMap(activeUnits)
 
     on(events(s).mousebutton, priority = 2) do event
 
-        if event.button == Mouse.left && event.action == Mouse.press
+        if event.button == Mouse.right && event.action == Mouse.press
 
             plt, i = GLMakie.pick(s,10)
             # println(plt)
             if plt isa Scatter{Tuple{Vector{Point{2, Float32}}}}
     
-                # idx[] = i
-                # selectUnit__M.i_selected = i
-                selectUnit__M.i_selected = i # need     this to not do anything. 
+                selectUnit__M.i_selected = i 
             end
         end
 
@@ -708,7 +704,7 @@ function plotInteractiveMap(activeUnits)
         # if event.button == Mouse.right && event.action == Mouse.press && idx[] != 0
         on(events(ax).mouseposition, priority = 3) do mp
             mb = events(s).mousebutton[]
-            if mb.button == Mouse.right && mb.action == Mouse.press
+            if mb.button == Mouse.left && mb.action == Mouse.press
 
                 # get current unit and update destination
                 cu = to_value(CurrentUnit)

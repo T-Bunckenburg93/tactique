@@ -17,15 +17,11 @@ GLMakie.activate!(inline=true)
 
 
 # I want to see if unit1's radius overlaps with unit2
-function checkOverlapR(unit1::Unit, unit2::Unit;print=false)
+function checkOverlap(unit1::Unit, unit2::Unit;print=false)
 
     d = sqrt((unit1.position[1] - unit2.position[1])^2 + (unit1.position[2] - unit2.position[2])^2)
     r₁ = unit1.InfluenceRadius
     r₂ = unit2.InfluenceRadius
-
-    # println("d:", d)
-    # println("r₁:", r₁)
-    # println("r₂:", r₂)
 
     if d == 0 && r₁ == r₂ 
         if print
@@ -252,65 +248,9 @@ function killCheck(u::Unit)
         return false
     end
 end
-# j = unit("u1",combatStrength = 10,staringSoliderCnt= 1000, soliderCnt = 100, InfluenceRadius = 20)
 
-"""
-This takes a unit and a point and moves it to that point based on the units speed.
-"""
-function  setMoveOrder!(unit::Unit,position::Point2f; speed=missing)
-    
-    unit.destination = position
-    if !ismissing(speed)
-        unit.speed = speed
-    end
+# j = unit("u1",combatStrength = 10,staringSoliderCnt= 1000, soliderCnt = 100, InfluenceRadius =
 
-    return unit
-    
-end
-function setMoveOrder!(unit::Unit, x::Number, y::Number; speed=missing)
-    p = Point2f(x,y)
-    setMoveOrder!(unit,p,speed=speed)
-
-    return 
-end
-function setMoveOrder!(unit::Observable, x::Number, y::Number; speed=missing)
-    u = to_value(unit)
-    p = Point2f(x,y)
-    setMoveOrder!(u,p,speed=speed)
-    unit[] = u
-    return 
-end
-
-
-function MoveToPoint!(unit::Unit)
-
-    if ismissing(unit.destination)
-        return
-    end
-
-    speed = unit.speed
-
-    # first, lets check if the unit is engaged.
-    if unit.isEngaged
-        speed = speed/3
-    end
-
-    # get the distance between the two points
-    distance = sqrt((unit.position[1] - unit.destination[1])^2 + (unit.position[2] - unit.destination[2])^2)
-    if distance <  unit.speed
-        teleportUnit!(unit, unit.destination)
-        return
-    else
-
-        # move it towards the point. first get the unit vector from the unit to the desired point
-        v = [unit.destination[1] - unit.position[1], unit.destination[2] - unit.position[2]]
-        vNorm = v / norm(v)
-        # move the unit in that direction
-        teleportUnit!(unit, unit.position[1] + vNorm[1] * unit.speed, unit.position[2] + vNorm[2] * unit.speed)
-        # and remove supplies equal to 1 + 1/10th of the distance moved.
-        unit.supplies = max(unit.supplies - 1 - distance/10,0)
-    end
-end
 
 
 """

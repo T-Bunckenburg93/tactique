@@ -88,6 +88,7 @@ mutable struct Unit
     speed::Number  # in chunks/hour
     stealth::Number # modifier of unit not being spotted
     reconissance::Number # modifier of unit spotting other units
+    doctrine::String # how the unit behaves in combat.
 
 
 end
@@ -113,7 +114,8 @@ function unit(
         supplies = 1200,
         speed = 6,
         stealth=2,
-        reconissance=4
+        reconissance=4,
+        doctrine = "CONTROL",
         )
 
         if ismissing(destination)
@@ -139,7 +141,8 @@ function unit(
             supplies, 
             speed,
             stealth,
-            reconissance
+            reconissance,
+            doctrine,
             )
     # ensure that the unit meets required constrants,
     changeInfluence!(u, InfluenceRadius)
@@ -423,97 +426,6 @@ function plotSingleUnit(u::Unit,col = :red)
     return p
 end
 
-# u1 = unit("u1",position = Point2f(10,10),InfluenceRadius = 3,vision =2)
-# plotSingleUnit(u1)
-"""
-Plots the units on the map.
- 
-"""
-function plotVisions(activeUnits,display::Int=3)
-
-    # get team1 vision points
-        team1 = [u for u in activeUnits if u.team == "team1"]
-        # get the points for each unit
-        t1_influencePoints = []
-        t1_visionPoints = []
-    
-        for i in team1
-    
-            influencePoints = getInfluencePoints(i)
-            visionPoints = getVisionPoints(i)
-            union!(t1_influencePoints,influencePoints)
-            union!(t1_visionPoints,visionPoints)
-    
-        end
-        t1_visionOnlyPoints = setdiff(t1_visionPoints,t1_influencePoints)
-    
-        team2 = [u for u in activeUnits if u.team == "team2"]
-        # get the points for each unit
-        t2_influencePoints = []
-        t2_visionPoints = []
-    
-        for i in team2
-            influencePoints = getInfluencePoints(i)
-            visionPoints = getVisionPoints(i)
-            union!(t2_influencePoints,influencePoints)
-            union!(t2_visionPoints,visionPoints)
-        end
-        t2_visionOnlyPoints = setdiff(t2_visionPoints,t2_influencePoints)
-    
-        contestedPoints = intersect(t1_influencePoints,t2_influencePoints)
-    
-    # Now we start plotting
-        f = Figure()
-        ax = f[1, 1] = Axis(f)
-    
-        if size(contestedPoints,1) > 0
-            scatter!([i[1] for i in contestedPoints],[i[2] for i in contestedPoints],color = :black,  markersize = 25, marker  ='⚔')
-        end
-    
-        if display == 1 || display == 3 # team1
-    
-            # lets get the arcs
-            col = :blue
-            for u in team1
-                scatter!([u.position[1]],[u.position[2]],markersize = 30,color = col,marker = '⌂')
-                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius,0,2π,color = col)
-                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius + u.vision,-π,π,color = col,linestyle = :dash, linewidth = 0.5)
-            end
-    
-            t1_visionOverlap = intersect(t1_visionOnlyPoints,t2_influencePoints)
-            if size(t1_visionOverlap,1) > 0
-                scatter!([i[1] for i in t1_visionOverlap],[i[2] for i in t1_visionOverlap],color = col,  markersize = 10, marker  ='⚆', marker_offset = -5)
-            end
-    
-            t1_controlPoints = setdiff(t1_influencePoints,t2_influencePoints)
-            if size(t1_controlPoints,1) > 0
-                scatter!([i[1] for i in t1_controlPoints],[i[2] for i in t1_controlPoints],markersize = 10,color = col, marker = '⚐', marker_offset = -5)
-            end
-        end
-        if display == 2 || display == 3
-    
-            col = :red
-            for u in team2
-                scatter!([u.position[1]],[u.position[2]],markersize = 30,color = col,marker = '⌂')
-                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius,0,2π,color = col)
-                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius + u.vision,-π,π,color = col,linestyle = :dash, linewidth = 0.5)
-            end
-    
-            t2_visionOverlap = intersect(t2_visionOnlyPoints,t1_influencePoints)
-            if size(t2_visionOverlap,1) > 0
-                scatter!([i[1] for i in t2_visionOverlap],[i[2] for i in t2_visionOverlap],color = col,  markersize = 10, marker  ='⚆', marker_offset = -5)
-            end
-    
-            t2_controlPoints = setdiff(t2_influencePoints,t1_influencePoints)
-            if size(t2_controlPoints,1) > 0
-                scatter!([i[1] for i in t2_controlPoints],[i[2] for i in t2_controlPoints],markersize = 10,color = col, marker = '⚐', marker_offset = -5)
-            end
-    
-        end
-        # display(f)
-        f
-    end
-    
 function plotVisions(u1::Unit,u2::Unit,display::Int=3)
 
     influencePoints1 = getInfluencePoints(u1)
@@ -627,7 +539,7 @@ function reconProb(u1_sz,u2_sz,u1_recon,u2_stealth,cover=1)
           # cover should increase the liklihood of evasion.
       p = (rand(Normal(u1_recon/10, 0.5),1)[1]+0.25) * sqrt(u1_sz) * sqrt(u2_sz) * (rand(Normal((10-u2_stealth)/10, 0.5),1)[1]+0.25)
   
-      p = min(sqrt(abs(p)),6)/4
+      p = min(sqrt(abs(p)),6)/5
   
       return p
   
@@ -637,7 +549,7 @@ function reconProb(u1_sz,u2_sz,u1_recon,u2_stealth,cover=1)
 #   u1 = []
 #   u2  = []
 
-#   reconProb(5,5,10,5)
+  reconProb(5,5,10,5)
 
 #   for i in 1:10
 #       for j in 1:10
@@ -660,23 +572,22 @@ function reconProb(u1_sz,u2_sz,u1_recon,u2_stealth,cover=1)
 This is to see if unit1 spots unit2
     we assume that all points are vision points
 """
-function reconCheck(mp::MapPoint,u1::Unit,u2::Unit)
-
+function reconVizCheck(mp::MapPoint,u1::Unit,u2::Unit)
 
     recon = u1.reconissance
     stealth = u2.stealth
     cover = mp.cover
     u1_sz = u1.soliderCnt / size(getInfluencePoints(u1),1)
     u2_sz = u2.soliderCnt / size(getInfluencePoints(u2),1)
-    
 
     p = reconProb(u1_sz,u2_sz,recon,stealth,cover)
 
-    println("prob detect: ",p)
+    # println("prob detect: ",p)
     
     # I then want the vision distance of each point
     d = sqrt((u1.position[1] - mp.position[1])^2 + (u1.position[2] - mp.position[2])^2) - u1.InfluenceRadius
-    println("Distance: ",d) 
+
+    # println("Distance: ",d) 
     
     # we can add more terrain effects here.
 
@@ -684,8 +595,95 @@ function reconCheck(mp::MapPoint,u1::Unit,u2::Unit)
 
 end
 
+# I want to get all the MP's that t1 can see.
+# as a list of cartesian indexes.
+
+function getVisionEvents(activeUnits,EVENTS=EVENTS)
+    visArray = []
+    visProb = []
+    # we check if there are any vision events
+    for i in activeUnits
+        for j in activeUnits
+            if i != j && i.team != j.team
+
+                viz = getVisionOverlap(i,j)
+
+                # get the real reports
+                for cI in viz
+                    mp = BATTLEMAP.points[cI[1],cI[2]]
+                    p = reconVizCheck(mp,i,j)
+                    println(p)
+                    if p > 0.5
+                        push!(EVENTS,GenerateVisReport(i,j,mp,p,true))
+                        push!(visArray,cI)
+                        push!(visProb,p)
+                        # println("Unit 1 sees something at (REAL)", mapPt)
+                    end
+                end
+                # get the fake ones
+                for cI in setdiff(getVisionPoints(i),viz)
+                    mp = BATTLEMAP.points[cI[1],cI[2]]
+
+                    if rand(Float64) > 0.995 # this is the chance of spotting something that is not real. 
+                        fakeP = rand(0.5..0.65)
+                        push!(EVENTS,GenerateVisReport(i,j,mp,fakeP,false))
+                        push!(visArray,cI)
+                        push!(visProb,fakeP)
+                        # println("Unit 1 sees something at (FAKE)",mapPt)
+                    end
+                end 
+            end
+        end
+    end
+    return visArray,visProb
+end
 
 
+"""
+This is to see if unit1 spots unit2
+    we assume that all points are influence points
+"""
+function reconInfluenceCheck(mp::MapPoint,u1::Unit,u2::Unit)
+
+    recon = u1.reconissance
+    stealth = u2.stealth
+    cover = mp.cover
+    u1_sz = u1.soliderCnt / size(getInfluencePoints(u1),1)
+    u2_sz = u2.soliderCnt / size(getInfluencePoints(u2),1)
+    u1_doctrine = u1.doctrine
+    u2_doctrine = u2.doctrine
+
+    p = (rand(Normal(recon/10, 0.5),1)[1]+0.25) * sqrt(u1_sz) * sqrt(u2_sz) * (rand(Normal((10-stealth)/10, 0.5),1)[1]+0.25) 
+  
+    p = min(sqrt(abs(p)),6)/3
+    
+    # apply Doctrine effects here.
+
+ 
+    if u1_doctrine in ["DASH","ROUT"] # low chance of detection of other unit.
+        p = p / 10
+    elseif u1_doctrine in ["WITHDRAW"] # you're probably not proactivly scouting, but you are keeping tabs
+        p = p / 2
+    else if u1_doctrine in ["CONTROL","PERIMETER"]
+        p = p / 2
+    elseif u1_doctrine in ["RECONNAISSANCE","HUNT","AMBUSH"]
+        p = p * 1.5
+    end
+
+
+
+    # println("prob detect: ",p)
+    
+    # I then want the vision distance of each point
+    d = sqrt((u1.position[1] - mp.position[1])^2 + (u1.position[2] - mp.position[2])^2) - u1.InfluenceRadius
+    if d <= 0
+        d = 1
+    end
+    # println("Distance: ",d) 
+    
+    # we can add more terrain effects here.
+    return p/ceil(d)
+end
 
 function miniTick()
 end
@@ -702,5 +700,190 @@ struct Event
     position::Point2f
     data::Dict{String,Any}
 end
+
+
+# ok, so here we have a function that creates a events.
+
+
+# ok, so how can we generate an event from this?
+"""
+generates an event from a vision report that may be sent to the player. 
+"""
+function GenerateVisReport(u1,u2,mp,confidence,real=true)
+
+# possible information to include in the event:
+    EPos  = u2.position
+    EDest = u2.destination
+    ESpeed = u2.speed
+    ESupplies = u2.supplies
+    ECombatStrength = u2.combatStrength
+    Emorale = u2.morale
+    ESoliderCnt = u2.soliderCnt/100
+    EstaringSoliderCnt = u2.staringSoliderCnt
+    Elosses =  ESoliderCnt/EstaringSoliderCnt
+    EInfluenceRadius = u2.InfluenceRadius
+    Estealth = u2.stealth
+    Erecon = u2.reconissance
+    # Edoctrine = u2.doctrine
+    EType = u2.type
+    if !real
+    ESpeed = round(rand(Float64)*10)
+    # ESoliderCnt = round(rand(Float64)*1000)
+    EDest = Point2f(mp.position[1] + rand(1:10),mp.position[2] + rand(1:10))
+    end
+
+    d = Dict()
+    # want to be able to mix up fake and real reports
+    if rand(Float64) > 0.8
+        d["Enemy_Speed"] = ESpeed
+    end
+    if rand(Float64) > 0.8
+        d["Enemy_Dest"] = EDest
+    end
+
+    if confidence > 0.75
+        if rand(Float64) > 0.5
+            d["Enemy_Type"] = EType
+        end
+        if rand(Float64) > 0.8
+            d["Enemy_morale"] = Emorale
+        end
+        if rand(Float64) > 0.8
+            d["losses"] = Elosses
+        end
+
+        if rand(Float64) > 0.8
+            d["Enemy_Supplies"] = ESupplies
+        end
+        if rand(Float64) > 0.8
+            d["Enemy_CombatStrength"] = ECombatStrength
+        end
+    elseif confidence > 0.8
+        
+        if rand(Float64) > 0.9
+            d["Enemy_Pos"] = EPos
+        end
+        if rand(Float64) > 0.9
+            d["Enemy_Dest"] = EDest
+        end
+        if rand(Float64) > 0.9
+            d["EInfluenceRadius"] = EInfluenceRadius
+        end
+        if rand(Float64) > 0.9
+            d["Estealth"] = Estealth
+        end
+        if rand(Float64) > 0.9
+            d["Erecon"] = Erecon
+        end
+    end
+
+    event = Event("team1",1,"recon",confidence,u1.id,mp.position,d)
+    return event
+end
+
+
+
+# u1 = unit("u1",position = Point2f(10,10),InfluenceRadius = 3,vision =2)
+# plotSingleUnit(u1)
+"""
+Plots the units on the map.
+ 
+"""
+function plotVisions(activeUnits,display::Int=3)
+
+    # get team1 vision points
+        team1 = [u for u in activeUnits if u.team == "team1"]
+        # get the points for each unit
+        t1_influencePoints = []
+        t1_visionPoints = []
+    
+        for i in team1
+    
+            influencePoints = getInfluencePoints(i)
+            visionPoints = getVisionPoints(i)
+            union!(t1_influencePoints,influencePoints)
+            union!(t1_visionPoints,visionPoints)
+    
+        end
+        t1_visionOnlyPoints = setdiff(t1_visionPoints,t1_influencePoints)
+    
+        team2 = [u for u in activeUnits if u.team == "team2"]
+        # get the points for each unit
+        t2_influencePoints = []
+        t2_visionPoints = []
+    
+        for i in team2
+            influencePoints = getInfluencePoints(i)
+            visionPoints = getVisionPoints(i)
+            union!(t2_influencePoints,influencePoints)
+            union!(t2_visionPoints,visionPoints)
+        end
+        t2_visionOnlyPoints = setdiff(t2_visionPoints,t2_influencePoints)
+    
+        contestedPoints = intersect(t1_influencePoints,t2_influencePoints)
+    
+    # Now we start plotting
+        f = Figure()
+        ax = f[1, 1] = Axis(f)
+    
+        if size(contestedPoints,1) > 0
+            scatter!([i[1] for i in contestedPoints],[i[2] for i in contestedPoints],color = :black,  markersize = 25, marker  ='⚔')
+        end
+    
+        if display == 1 || display == 3 # team1
+    
+            # lets get the arcs
+            col = :blue
+            for u in team1
+                scatter!([u.position[1]],[u.position[2]],markersize = 30,color = col,marker = '⌂')
+                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius,0,2π,color = col)
+                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius + u.vision,-π,π,color = col,linestyle = :dash, linewidth = 0.5)
+            end
+    
+            t1_visionOverlap = intersect(t1_visionOnlyPoints,t2_influencePoints)
+            if size(t1_visionOverlap,1) > 0
+                scatter!([i[1] for i in t1_visionOverlap],[i[2] for i in t1_visionOverlap],color = col,  markersize = 10, marker  ='⚆', marker_offset = -5)
+            end
+    
+            t1_controlPoints = setdiff(t1_influencePoints,t2_influencePoints)
+            if size(t1_controlPoints,1) > 0
+                scatter!([i[1] for i in t1_controlPoints],[i[2] for i in t1_controlPoints],markersize = 10,color = col, marker = '⚐', marker_offset = -5)
+            end
+        end
+        if display == 2 || display == 3
+    
+            col = :red
+            for u in team2
+                scatter!([u.position[1]],[u.position[2]],markersize = 30,color = col,marker = '⌂')
+                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius,0,2π,color = col)
+                arc!(Point2f(u.position[1],u.position[2]),u.InfluenceRadius + u.vision,-π,π,color = col,linestyle = :dash, linewidth = 0.5)
+            end
+    
+            t2_visionOverlap = intersect(t2_visionOnlyPoints,t1_influencePoints)
+            if size(t2_visionOverlap,1) > 0
+                scatter!([i[1] for i in t2_visionOverlap],[i[2] for i in t2_visionOverlap],color = col,  markersize = 10, marker  ='⚆', marker_offset = -5)
+            end
+    
+            t2_controlPoints = setdiff(t2_influencePoints,t1_influencePoints)
+            if size(t2_controlPoints,1) > 0
+                scatter!([i[1] for i in t2_controlPoints],[i[2] for i in t2_controlPoints],markersize = 10,color = col, marker = '⚐', marker_offset = -5)
+            end
+    
+        end
+        # display(f)
+        f
+    end
+
+
+# ok, so combat.
+# happens on each point where there is an intersection of influence.
+# && the doctrines of the units are to engage.
+
+mp = BATTLEMAP.points[1,1]
+u1 = unit("u1",position = Point2f(56,50),InfluenceRadius = 3,vision =2)
+u2 = unit("u2",position = Point2f(50,50),InfluenceRadius = 3,vision = 2)
+
+
+
 
 

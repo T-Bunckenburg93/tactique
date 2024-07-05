@@ -80,6 +80,7 @@ function unit(
         end
         if ismissing(destinationAngle)
             destinationAngle = angle
+            
         end
 
         width = soliderCnt/3 * spacing

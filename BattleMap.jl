@@ -5,6 +5,14 @@ u2 = unit("t1u2",team = "team1",position = Point2f(2000,2000),angle = 90)
 u3 = unit("t1u3",team = "team1",position = Point2f(3000,3000),angle = 180)
 u4 = unit("t1u4",team = "team1",position = Point2f(4000,4000),angle = 270)
 
+showFields(u1)
+
+# setMoveOrder!(u1,Point2f(5000,5000))
+
+
+# rotateUnit!(u1);
+
+
     activeUnits = [
     u1,
     u2,
@@ -176,7 +184,7 @@ on(events(ax).mousebutton, priority = 2) do event
             # get current unit and update destination
             cu = to_value(CurrentUnit)
             # println("current dest: ",cu.destination)
-            cu.destination = Point2f(mouseposition(ax))
+            setMoveOrder!(cu, Point2f(mouseposition(ax)))
             CurrentUnit[] = cu
 
             # push it back unto the active Unit, and update Observable
@@ -200,8 +208,8 @@ function tick()
     println(size(controlO[]))
 
     # moof all units to their move orders.
-    for i = 1:4
-        println(i)
+    # 1 tick is 5mins, so 60/5 = is an hour. 
+    for i = 1:1
 
         for u in activeUnits
             # showFields(u,fields = [:position,:destination])

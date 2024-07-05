@@ -80,7 +80,6 @@ function unit(
         end
         if ismissing(destinationAngle)
             destinationAngle = angle
-            
         end
 
         width = soliderCnt/3 * spacing
@@ -278,9 +277,14 @@ function setMoveOrder!(unit::Unit,position::Point2f; speed=missing)
     if !ismissing(speed)
         unit.speed = speed
     end
+
+    println("PRE destinationAngle: ",unit.destinationAngle)
     # get the angle between the two points
     v = [unit.destination[1] - unit.position[1], unit.destination[2] - unit.position[2]]
-    unit.destinationAngle = atan(v[2],v[1]) * 180 / pi
+    unit.destinationAngle = rad2deg(atan(v[2],v[1])) - 90 # unsure why -90 bit it works lol. 
+    println("POST destinationAngle: ",unit.destinationAngle)
+
+
 
     return unit
 end
@@ -335,7 +339,7 @@ end
 
 function rotateUnit!(unit::Unit)
 
-    if ismissing(unit.destinationAngle)
+    if ismissing(unit.destinationAngle ) || unit.angle == unit.destinationAngle
         return unit
     end
     
@@ -345,7 +349,9 @@ function rotateUnit!(unit::Unit)
     # I want to get the max rotational speed. Max speed at end depends.
     # V = r * ω  => ω = V/r
     r = unit.width / 2
-    ω = unit.speed / r
+    ω =  rad2deg(unit.speed / r)    
+
+    # println("ω:",ω," angle: ",angle," destinationAngle: ",destinationAngle)
 
     if abs(destinationAngle - angle) < ω
         unit.angle = destinationAngle

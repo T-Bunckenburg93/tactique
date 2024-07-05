@@ -29,6 +29,7 @@ mutable struct Unit
     position::Point2f
     destination::Point2f
     angle::Number # in degrees
+    destinationAngle::Number
     visionDistance::Number
     controlDistance::Number
     controlAngle::Number
@@ -40,7 +41,7 @@ mutable struct Unit
     combatStrength::Number # 0,1,2
     morale::Number # 0,1,2
     supplies::Number
-    speed::Number  # in chunks/hour
+    speed::Number  # in m/5mins
     stealth::Number # modifier of unit not being spotted
     reconissance::Number # modifier of unit spotting other unitst
     tactic::String # how the unit behaves in combat.
@@ -57,6 +58,7 @@ function unit(
         position = Point2f(0,0),
         destination = missing,
         angle = 0,
+        destinationAngle = missing,
         visionDistance = 2000,
         controlDistance = 300,
         controlAngle = 45,
@@ -67,7 +69,7 @@ function unit(
         combatStrength = 1,
         morale = 1,
         supplies = 1000,
-        speed = 100,
+        speed = 250,
         stealth = 1,
         reconissance = 1,
         tactic = "CONTROL",
@@ -75,6 +77,9 @@ function unit(
 
         if ismissing(destination)
             destination = position
+        end
+        if ismissing(destinationAngle)
+            destinationAngle = angle
         end
 
         width = soliderCnt/3 * spacing
@@ -88,6 +93,7 @@ function unit(
             position, 
             destination,
             angle,
+            destinationAngle,
             visionDistance,
             controlDistance,
             controlAngle,
@@ -240,8 +246,8 @@ function plotUnit!(axis,unit::Unit, unitColor = :red)
     rectangle_points = get_rectangle_points(unit.position, unit.width, unit.depth, unit.angle)
     control_Arc = controlArc(unit.position, unit.width, unit.depth, unit.angle, unit.controlDistance, unit.controlAngle)
 
-    lines!(axis,rectangle_points, color = unitColor)
-    lines!(axis,control_Arc, color = (:blue,0.5))
+    linesegments!(axis,rectangle_points, color = unitColor)
+    linesegments!(axis,control_Arc, color = (:blue,0.5))
 
 end
 
@@ -264,12 +270,17 @@ end
 
 """
 This takes a unit and a point and sets the unit to move to that point.
+if the unit is facing a different way, it will also update the destination angle.
 """
-function  setMoveOrder!(unit::Unit,position::Point2f; speed=missing)
+function setMoveOrder!(unit::Unit,position::Point2f; speed=missing)
     unit.destination = position
     if !ismissing(speed)
         unit.speed = speed
     end
+    # get the angle between the two points
+    v = [unit.destination[1] - unit.position[1], unit.destination[2] - unit.position[2]]
+    unit.destinationAngle = atan(v[2],v[1]) * 180 / pi
+
     return unit
 end
 function setMoveOrder!(unit::Unit, x::Number, y::Number; speed=missing)
@@ -292,7 +303,7 @@ This moves the unit towards the destination by the amount set in unit.speed.
 """
 function MoveToPoint!(unit::Unit)
 
-    if ismissing(unit.destination)
+    if ismissing(unit.destination) 
         return
     end
 
@@ -319,6 +330,33 @@ function MoveToPoint!(unit::Observable)
     u = to_value(unit)
     MoveToPoint!(u)
     unit[] = u
+end
+
+function rotateUnit!(unit::Unit)
+
+    if ismissing(unit.destinationAngle)
+        return unit
+    end
+    
+    angle = unit.angle
+    destinationAngle = unit.destinationAngle
+    
+    # I want to get the max rotational speed. Max speed at end depends.
+    # V = r * ω  => ω = V/r
+    r = unit.width / 2
+    ω = unit.speed / r
+
+    if abs(destinationAngle - angle) < ω
+        unit.angle = destinationAngle
+    else
+        if destinationAngle > angle
+            unit.angle = angle + ω
+        else
+            unit.angle = angle - ω
+        end
+    end
+
+    return unit
 end
 
 

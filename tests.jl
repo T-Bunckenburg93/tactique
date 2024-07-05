@@ -45,8 +45,8 @@ teleportUnit!(u2, 10, 0)
 # u2 = unit("u2",combatStrength = 5)
 # teleportUnit!(u1,15,1)
 
-# calculateCombat(u1,u2)
-# calculateCombat(u2,u1)
+# calculateCombat!(u1,u2)
+# calculateCombat!(u2,u1)
 
 # applyCombat!(u1)
 # applyCombat!(u2)

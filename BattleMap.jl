@@ -1,15 +1,15 @@
 using GLMakie
 
 u1 = unit("t1u1",team = "team1",position = Point2f(1000,1000),angle = 0)
-u2 = unit("t1u1",team = "team1",position = Point2f(2000,2000),angle = 90)
-u3 = unit("t1u1",team = "team1",position = Point2f(3000,3000),angle = 180)
-u4 = unit("t1u1",team = "team1",position = Point2f(4000,4000),angle = 270)
+u2 = unit("t1u2",team = "team1",position = Point2f(2000,2000),angle = 90)
+u3 = unit("t1u3",team = "team1",position = Point2f(3000,3000),angle = 180)
+u4 = unit("t1u4",team = "team1",position = Point2f(4000,4000),angle = 270)
 
     activeUnits = [
     u1,
-    # u2,
-    # u3,
-    # u4
+    u2,
+    u3,
+    u4
     ]
     ActiveO =  Observable(activeUnits) 
 
@@ -167,11 +167,12 @@ on(events(ax).mousebutton, priority = 2) do event
 
     # println("positions: ",positions)
 
+    hotkey = Keyboard.a
     # if event.button == Mouse.right && event.action == Mouse.press && idx[] != 0
     on(events(ax).mouseposition, priority = 3) do mp
         mb = events(ax).mousebutton[]
-   
-        if to_value(events(ax).entered_window) == true && mb.button == Mouse.left && mb.action == Mouse.press
+
+        if to_value(events(ax).entered_window) == true && mb.button == Mouse.left && mb.action == Mouse.press && ispressed(ax, hotkey)
             # get current unit and update destination
             cu = to_value(CurrentUnit)
             # println("current dest: ",cu.destination)
@@ -205,6 +206,7 @@ function tick()
         for u in activeUnits
             # showFields(u,fields = [:position,:destination])
             MoveToPoint!(u)
+            rotateUnit!(u)
         end
 
         
@@ -235,10 +237,6 @@ function tick()
         ActiveO[] = activeUnits
         notify(ActiveO)
 
-        for i in ActiveO[] # this needs to be turned into a bunch of observables or create recipe
-            plotUnit!(ax,i)
-        end
-        # sleep(1)
         display(s)
     end
     # activeUnits = plotInteractiveMap(activeUnits)
